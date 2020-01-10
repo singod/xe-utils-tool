@@ -107,6 +107,12 @@ describe('Date functions', () => {
       XEUtils.toStringDate(/\d/)
     ).toEqual('Invalid Date')
     expect(
+      XEUtils.toStringDate([])
+    ).toEqual('Invalid Date')
+    expect(
+      XEUtils.toStringDate({})
+    ).toEqual('Invalid Date')
+    expect(
       XEUtils.toStringDate([2018, 1, 1])
     ).toEqual('Invalid Date')
     expect(
@@ -137,6 +143,12 @@ describe('Date functions', () => {
       XEUtils.toStringDate('2017-12-20')
     ).toEqual(new Date(2017, 11, 20))
     expect(
+      XEUtils.toStringDate('20|2018/12', 'dd|yyyy/MM')
+    ).toEqual(new Date(2018, 11, 20))
+    expect(
+      XEUtils.toStringDate('2018/12', 'yyyy/MM')
+    ).toEqual(new Date(2018, 11))
+    expect(
       XEUtils.toStringDate('2017-12-20 10:10:30')
     ).toEqual(new Date(2017, 11, 20, 10, 10, 30))
     expect(
@@ -154,6 +166,18 @@ describe('Date functions', () => {
     expect(
       XEUtils.toStringDate('2017-12-20T10:10:30.423Z')
     ).toEqual(new Date('2017-12-20T10:10:30.423Z'))
+    expect(
+      XEUtils.toStringDate(1513735830000)
+    ).toEqual(new Date(1513735830000))
+    expect(
+      XEUtils.toStringDate(20171220101030)
+    ).toEqual(new Date(20171220101030))
+    expect(
+      XEUtils.toStringDate('1513735830000')
+    ).toEqual(new Date(1513735830000))
+    expect(
+      XEUtils.toStringDate('20171220101030')
+    ).toEqual(new Date(20171220101030))
     expect(
       XEUtils.toStringDate('12/20/2017', 'MM/dd/yyyy')
     ).toEqual(new Date(2017, 11, 20))
@@ -211,6 +235,18 @@ describe('Date functions', () => {
     expect(
       XEUtils.toDateString('Year:2018 Month:01 Day:26')
     ).toEqual('Invalid Date')
+    expect(
+      XEUtils.toDateString('2017')
+    ).toEqual('2017-01-01 00:00:00')
+    expect(
+      XEUtils.toDateString('2017-01')
+    ).toEqual('2017-01-01 00:00:00')
+    expect(
+      XEUtils.toDateString('2017-02')
+    ).toEqual('2017-02-01 00:00:00')
+    expect(
+      XEUtils.toDateString('2017-02-03')
+    ).toEqual('2017-02-03 00:00:00')
     expect(
       XEUtils.toDateString(time)
     ).toEqual('2017-01-01 14:05:30')

@@ -29,12 +29,12 @@ var dateFormatRules = [
   * @return {String}
   */
 function toStringDate (str, format) {
-  var arr, sIndex, index, rules, len, rest, dateType, tempMatch, zStr
+  var arr, sIndex, index, rules, len, rest, isDateType, tempMatch, zStr
   var dates = []
   if (str) {
-    dateType = isDate(str)
-    if (dateType || /^[0-9]{11,13}$/.test(str)) {
-      rest = new Date(dateType ? helperGetDateTime(str) : staticParseInt(str))
+    isDateType = isDate(str)
+    if (isDateType || (!format && /^[0-9]{11,15}$/.test(str))) {
+      rest = new Date(isDateType ? helperGetDateTime(str) : staticParseInt(str))
     } else if (isString(str)) {
       format = format || setupDefaults.formatDate
       arrayEach(dateFormatRules, function (item) {
@@ -43,7 +43,7 @@ function toStringDate (str, format) {
           sIndex = format.indexOf(arr[0])
           if (sIndex > -1) {
             tempMatch = str.substring(sIndex, sIndex + arr[1]) || 0
-            if (item.offset) {
+            if (tempMatch && item.offset) {
               tempMatch = parseFloat(tempMatch) + item.offset
             }
             dates.push(tempMatch)
@@ -67,7 +67,7 @@ function toStringDate (str, format) {
           }
         }
       } else {
-        rest = new Date(dates[0], dates[1], dates[2], dates[3], dates[4], dates[5], dates[6])
+        rest = new Date(dates[0], dates[1], dates[2] || 1, dates[3], dates[4], dates[5], dates[6])
       }
     }
   }

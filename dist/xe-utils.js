@@ -1,6 +1,5 @@
 /**
- * xe-utils.js v2.2.2
- * (c) 2017-present Xu Liangzhan
+ * xe-utils.js v2.3.1
  * ISC License.
  * @preserve
  */
@@ -34,7 +33,7 @@
   function mixin () {
     arrayEach(arguments, function (methods) {
       each(methods, function (fn, name) {
-        XEUtils[name] = isFunction(fn) && fn._c !== false ? function () {
+        XEUtils[name] = isFunction(fn) ? function () {
           var result = fn.apply(XEUtils.$context, arguments)
           XEUtils.$context = null
           return result
@@ -590,14 +589,14 @@
    * @param {Array} arrays 数组集合
    */
   function unzip (arrays) {
-    var index, len
+    var index, maxItem, len
     var result = []
     if (arrays && arrays.length) {
       index = 0
-      len = max(arrays, function (item) {
-        return item.length || 0
-      }).length
-      for (; index < len; index++) {
+      maxItem = max(arrays, function (item) {
+        return item ? item.length : 0
+      })
+      for (len = maxItem ? maxItem.length : 0; index < len; index++) {
         result.push(map(arrays, index))
       }
     }
@@ -828,17 +827,18 @@
     return unTreeList([], array, assign({}, setupDefaults.treeOptions, options))
   }
 
-  function findTreeItem (parent, obj, iterate, context, path, parseChildren, opts) {
+  function findTreeItem (parent, obj, iterate, context, path, node, parseChildren, opts) {
     if (obj) {
-      var item, index, len, paths, match
+      var item, index, len, paths, nodes, match
       for (index = 0, len = obj.length; index < len; index++) {
         item = obj[index]
         paths = path.concat(['' + index])
-        if (iterate.call(context, item, index, obj, paths, parent)) {
-          return { index: index, item: item, path: paths, items: obj, parent: parent }
+        nodes = node.concat([item])
+        if (iterate.call(context, item, index, obj, paths, parent, nodes)) {
+          return { index: index, item: item, path: paths, items: obj, parent: parent, nodes: nodes }
         }
         if (parseChildren && item) {
-          match = findTreeItem(item, item[parseChildren], iterate, context, paths.concat([parseChildren]), parseChildren, opts)
+          match = findTreeItem(item, item[parseChildren], iterate, context, paths.concat([parseChildren]), nodes, parseChildren, opts)
           if (match) {
             return match
           }
@@ -851,21 +851,22 @@
     * 从树结构中查找匹配第一条数据的键、值、路径
     *
     * @param {Object} obj 对象/数组
-    * @param {Function} iterate(item, index, items, path, parent) 回调
+    * @param {Function} iterate(item, index, items, path, parent, nodes) 回调
     * @param {Object} options {children: 'children'}
     * @param {Object} context 上下文
-    * @return {Object} { item, index, items, path }
+    * @return {Object} { item, index, items, path, parent, nodes }
     */
   var findTree = helperCreateTreeFunc(findTreeItem)
 
-  function eachTreeItem (parent, obj, iterate, context, path, parseChildren, opts) {
-    var paths
+  function eachTreeItem (parent, obj, iterate, context, path, node, parseChildren, opts) {
+    var paths, nodes
     each(obj, function (item, index) {
       paths = path.concat(['' + index])
-      iterate.call(context, item, index, obj, paths, parent)
+      nodes = node.concat([item])
+      iterate.call(context, item, index, obj, paths, parent, nodes)
       if (item && parseChildren) {
         paths.push(parseChildren)
-        eachTreeItem(item, item[parseChildren], iterate, context, paths, parseChildren, opts)
+        eachTreeItem(item, item[parseChildren], iterate, context, paths, nodes, parseChildren, opts)
       }
     })
   }
@@ -874,20 +875,21 @@
     * 从树结构中遍历数据的键、值、路径
     *
     * @param {Object} obj 对象/数组
-    * @param {Function} iterate(item, index, items, path, parent) 回调
+    * @param {Function} iterate(item, index, items, path, parent, nodes) 回调
     * @param {Object} options {children: 'children', mapChildren: 'children}
     * @param {Object} context 上下文
     */
   var eachTree = helperCreateTreeFunc(eachTreeItem)
 
-  function mapTreeItem (parent, obj, iterate, context, path, parseChildren, opts) {
-    var paths, rest
+  function mapTreeItem (parent, obj, iterate, context, path, node, parseChildren, opts) {
+    var paths, nodes, rest
     var mapChildren = opts.mapChildren || parseChildren
     return map(obj, function (item, index) {
       paths = path.concat(['' + index])
-      rest = iterate.call(context, item, index, obj, paths, parent)
+      nodes = node.concat([item])
+      rest = iterate.call(context, item, index, obj, paths, parent, nodes)
       if (rest && item && parseChildren && item[parseChildren]) {
-        rest[mapChildren] = mapTreeItem(item, item[parseChildren], iterate, context, paths, parseChildren, opts)
+        rest[mapChildren] = mapTreeItem(item, item[parseChildren], iterate, context, paths, nodes, parseChildren, opts)
       }
       return rest
     })
@@ -897,7 +899,7 @@
     * 从树结构中指定方法后的返回值组成的新数组
     *
     * @param {Object} obj 对象/数组
-    * @param {Function} iterate(item, index, items, path, parent) 回调
+    * @param {Function} iterate(item, index, items, path, parent, nodes) 回调
     * @param {Object} options {children: 'children'}
     * @param {Object} context 上下文
     * @return {Object/Array}
@@ -916,8 +918,8 @@
   function filterTree (obj, iterate, options, context) {
     var result = []
     if (obj && iterate) {
-      eachTree(obj, function (item, index, items, path, parent) {
-        if (iterate.call(context, item, index, items, path, parent)) {
+      eachTree(obj, function (item, index, items, path, parent, nodes) {
+        if (iterate.call(context, item, index, items, path, parent, nodes)) {
           result.push(item)
         }
       }, options)
@@ -925,20 +927,21 @@
     return result
   }
 
-  function searchTreeItem (parentAllow, parent, obj, iterate, context, path, parseChildren, opts) {
-    var paths, rest, isAllow, hasChild
+  function searchTreeItem (parentAllow, parent, obj, iterate, context, path, node, parseChildren, opts) {
+    var paths, nodes, rest, isAllow, hasChild
     var rests = []
     var hasOriginal = opts.original
     var mapChildren = opts.mapChildren || parseChildren
     arrayEach(obj, function (item, index) {
       paths = path.concat(['' + index])
-      isAllow = parentAllow || iterate.call(context, item, index, obj, paths, parent)
+      nodes = node.concat([item])
+      isAllow = parentAllow || iterate.call(context, item, index, obj, paths, parent, nodes)
       hasChild = parseChildren && item[parseChildren]
       if (isAllow || hasChild) {
         rest = hasOriginal ? item : assign({}, item)
       }
       if (isAllow || hasChild) {
-        rest[mapChildren] = searchTreeItem(isAllow, item, item[parseChildren], iterate, context, paths, parseChildren, opts)
+        rest[mapChildren] = searchTreeItem(isAllow, item, item[parseChildren], iterate, context, paths, nodes, parseChildren, opts)
         if (isAllow || rest[mapChildren].length) {
           rests.push(rest)
         }
@@ -953,13 +956,13 @@
     * 从树结构中根据回调查找数据
     *
     * @param {Object} obj 对象/数组
-    * @param {Function} iterate(item, index, items, path, parent) 回调
+    * @param {Function} iterate(item, index, items, path, parent, nodes) 回调
     * @param {Object} options {children: 'children'}
     * @param {Object} context 上下文
     * @return {Array}
     */
-  var searchTree = helperCreateTreeFunc(function (parent, obj, iterate, context, path, parseChildren, opts) {
-    return searchTreeItem(0, parent, obj, iterate, context, path, parseChildren, opts)
+  var searchTree = helperCreateTreeFunc(function (parent, obj, iterate, context, path, nodes, parseChildren, opts) {
+    return searchTreeItem(0, parent, obj, iterate, context, path, nodes, parseChildren, opts)
   })
 
   function helperCreateIterateHandle (prop, useArray, restIndex, matchValue, defaultValue) {
@@ -993,7 +996,7 @@
     return function (obj, iterate, options, context) {
       var opts = options || {}
       var optChildren = opts.children || 'children'
-      return handle(null, obj, iterate, context, [], optChildren, opts)
+      return handle(null, obj, iterate, context, [], [], optChildren, opts)
     }
   }
 
@@ -1147,7 +1150,7 @@
   }
 
   /**
-    * 判断是否为空,包括空对象、空数值、空字符串
+    * 判断是否为空对象
     *
     * @param {Object} obj 对象
     * @return {Boolean}
@@ -2181,7 +2184,7 @@
     * @return {String}
    */
   function commafy (num, options) {
-    num = ('' + num).replace(/,/g, '')
+    num = toValString(num).replace(/,/g, '')
     if (num) {
       var opts = assign({ spaceNumber: 3, separator: ',' }, options)
       var optFixed = opts.fixed
@@ -2198,8 +2201,12 @@
    * @return {String}
    */
   function toFixedString (str, digits) {
-    var nums = ('' + toFixedNumber(str, digits)).split('.')
-    return digits ? [nums[0], '.', padEnd(nums[1] || '', digits, '0')].join('') : nums[0]
+    var nums = helperFixedNumber(str, digits).split('.')
+    var rest = digits ? [nums[0], '.', padEnd(nums[1] || '', digits, '0')].join('') : nums[0]
+    if (rest.substring(0, 1) === '-' && parseFloat(rest) === 0) {
+      return digits ? rest.replace(/^-/, '') : '0'
+    }
+    return rest
   }
 
   /**
@@ -2209,10 +2216,8 @@
    * @return {String}
    */
   function toFixedNumber (str, digits) {
-    if (digits) {
-      return toNumber(('' + toNumber(str)).replace(new RegExp('(\\d+.\\d{0,' + digits + '}).*'), '$1'))
-    }
-    return toInteger(str)
+    var rest = (digits ? toNumber : toInteger)(helperFixedNumber(str, digits))
+    return rest === 0 ? 0 : rest
   }
 
   /**
@@ -2254,10 +2259,16 @@
     return function (str) {
       if (str) {
         var num = handle(str)
-        return isNaN(num) ? 0 : num
+        if (!isNaN(num)) {
+          return num
+        }
       }
       return 0
     }
+  }
+
+  function helperFixedNumber (str, digits) {
+    return toValString(toNumber(str)).replace(new RegExp('(\\d+.\\d{0,' + digits + '}).*'), '$1')
   }
 
   /**
@@ -2318,12 +2329,12 @@
     * @return {String}
     */
   function toStringDate (str, format) {
-    var arr, sIndex, index, rules, len, rest, dateType, tempMatch, zStr
+    var arr, sIndex, index, rules, len, rest, isDateType, tempMatch, zStr
     var dates = []
     if (str) {
-      dateType = isDate(str)
-      if (dateType || /^[0-9]{11,13}$/.test(str)) {
-        rest = new Date(dateType ? helperGetDateTime(str) : staticParseInt(str))
+      isDateType = isDate(str)
+      if (isDateType || (!format && /^[0-9]{11,15}$/.test(str))) {
+        rest = new Date(isDateType ? helperGetDateTime(str) : staticParseInt(str))
       } else if (isString(str)) {
         format = format || setupDefaults.formatDate
         arrayEach(dateFormatRules, function (item) {
@@ -2332,7 +2343,7 @@
             sIndex = format.indexOf(arr[0])
             if (sIndex > -1) {
               tempMatch = str.substring(sIndex, sIndex + arr[1]) || 0
-              if (item.offset) {
+              if (tempMatch && item.offset) {
                 tempMatch = parseFloat(tempMatch) + item.offset
               }
               dates.push(tempMatch)
@@ -2356,7 +2367,7 @@
             }
           }
         } else {
-          rest = new Date(dates[0], dates[1], dates[2], dates[3], dates[4], dates[5], dates[6])
+          rest = new Date(dates[0], dates[1], dates[2] || 1, dates[3], dates[4], dates[5], dates[6])
         }
       }
     }
@@ -2867,16 +2878,18 @@
    * @param {Object} obj 对象
    */
   function template (str, obj) {
-    var rest = toValString(str)
-    if (rest && obj) {
-      return rest.replace(/\{{2}([.\w[\]\s]+)\}{2}/g, function (match, keys) {
-        return get(obj, keys)
-      })
-    }
-    return rest
+    return toValString(str).replace(/\{{2}([.\w[\]\s]+)\}{2}/g, function (match, key) {
+      return get(obj, trim(key))
+    })
   }
 
   function toValString (obj) {
+    if (isNumber(obj)) {
+      if (('' + obj).indexOf('e-') >= 0) {
+        var isNegative = obj < 0
+        return (isNegative ? '-' : '') + '0' + ('' + ((isNegative ? Math.abs(obj) : obj) + 1)).substr(1)
+      }
+    }
     return '' + (eqNull(obj) ? '' : obj)
   }
 
@@ -3411,7 +3424,7 @@
 
   // 浏览器相关的方法
 
-  XEUtils.mixin({
+  assign(XEUtils, {
     // object
     assign: assign,
     extend: extend,
